@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import fg from 'fast-glob';
 import { Client, Events, Collection, GatewayIntentBits, REST, Routes, MessageFlags } from 'discord.js';
+import logger from './lib/logger.js';
 
 dotenv.config();
 const TOKEN = process.env.TOKEN || "";
@@ -27,17 +28,17 @@ let commands = [];
         if ('data' in command && 'execute' in command) {
             client.commands.set(command.data.name, command);
             commands.push(command.data.toJSON());
-            // console.log(`found ${command.data.name} command.`);
+            // logger.info(`found ${command.data.name} command.`);
         }
     }
     (async (commands) => {
         try {
             const rest = new REST({ version: '10' }).setToken(TOKEN);
-            console.log('Started refreshing application (/) commands.');
+            logger.info('Started refreshing application (/) commands.');
             const data: any = await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });
-            console.log(`Successfully reloaded ${data.length} application (/) commands.`);
+            logger.info(`Successfully reloaded ${data.length} application (/) commands.`);
         } catch (error) {
-            console.error(error);
+            logger.error(error);
         }
     })(commands);
 })();
@@ -47,15 +48,15 @@ client.on(Events.InteractionCreate, async interaction => {
         return;
     }
     const command = interaction.client.commands.get(interaction.commandName);
-    console.log(`command matching ${interaction.commandId} was found.`);
     if (!command) {
-        console.error(`No command matching ${interaction.commandName} was found.`);
+        logger.error(`No command matching ${interaction.commandName} was found.`);
         return;
     }
     try {
         await command.execute(interaction);
+        logger.info(`excute command: ${command.data.name}, user: ${interaction.user.tag}`)
     } catch (error) {
-        console.error(error);
+        logger.error(error);
         if (interaction.replied || interaction.deferred) {
             await interaction.followUp({ content: 'There was an error while executing this command!', flags: "Ephemeral" });
         } else {
@@ -82,17 +83,17 @@ client.on(Events.MessageCreate, async (message) => {
             }
             const rest = new REST({ version: '10' }).setToken(TOKEN);
             await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });
-            console.log(`${commands.length} Commands reloaded by ${message.author.tag}.`);
+            logger.info(`${commands.length} Commands reloaded by ${message.author.tag}.`);
             await message.reply(`${commands.length} Commands reloaded successfully.`);  // Ephemeral responses are only available for interaction responses
         } catch (error) {
-            console.error(error);
+            logger.error(error);
             message.reply('There was an error while reloading commands.');
         }
     }
 });
 
 client.once(Events.ClientReady, readyClient => {
-    console.log(`Ready! Logged in as ${readyClient.user.tag}`);
+    logger.info(`Ready! Logged in as ${readyClient.user.tag}`);
 });
 
 // Log in to Discord with your client's token
