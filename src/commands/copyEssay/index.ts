@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder, ChatInputCommandInteraction, MessageFlags } from 'discord.js';
 import { PrismaClient } from '@prisma/client';
+import logger from '../../lib/logger.js';
 
 const prisma = new PrismaClient();
 
@@ -13,7 +14,7 @@ async function execute(interaction: ChatInputCommandInteraction) {
         orderBy: { id: 'asc' },
         skip: Math.floor(Math.random() * await prisma.copyessay.count())
     });
-    const silent = interaction.options.getBoolean('silent');
+    const silent = interaction.options.getBoolean('silent') || false;
     if (silent && randomEssay) {
         await interaction.reply({content: randomEssay.content, flags: MessageFlags.Ephemeral});
     } else if (randomEssay) {
@@ -21,6 +22,7 @@ async function execute(interaction: ChatInputCommandInteraction) {
     } else {
         await interaction.reply({content: "資料庫中尚無複製文", flags: MessageFlags.Ephemeral});
     }
+    logger.info(`excute copyessay, fetch essay: ${randomEssay?.id}, user: ${interaction.user.tag}, silent: ${silent}`);
     // await interaction.reply({ embeds: [embed] , flags: "Ephemeral" });
 }
 
