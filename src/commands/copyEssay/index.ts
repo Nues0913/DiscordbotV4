@@ -43,23 +43,13 @@ async function execute(interaction: ChatInputCommandInteraction) {
             await interaction.reply({ content: '找不到相關複製文', flags: MessageFlags.Ephemeral });
             return;
         }
-        const lines = results.map(r => `**#${r.essay.id}** ${r.essay.title} ｜ 相關度：${r.score} ｜ ${r.essay.content.slice(0, 30)}${r.essay.content.length > 30 ? '…' : ''}`);
-        const chunks: string[] = [];
-        let current = '';
-        for (const line of lines) {
-            if (current.length + line.length + 1 > 1900) {
-                chunks.push(current);
-                current = line;
-            } else {
-                current += (current ? '\n' : '') + line;
-            }
-        }
-        if (current) chunks.push(current);
-
-        await interaction.reply({ content: `找到 ${results.length} 則相關複製文：\n${chunks[0]}`, flags: MessageFlags.Ephemeral });
-        for (let i = 1; i < chunks.length; i++) {
-            await interaction.followUp({ content: chunks[i], flags: MessageFlags.Ephemeral });
-        }
+        const lines = results
+            .slice(0, 10)
+            .map(r => `**#${r.essay.id}** ${r.essay.title} ｜ 相關度：${r.score} ｜ ${r.essay.content.slice(0, 30)}${r.essay.content.length > 30 ? '…' : ''}`);
+        await interaction.reply({
+            content: `找到 ${results.length} 則相關複製文：\n${lines.join('\n')}`,
+            flags: MessageFlags.Ephemeral
+        });
         logger.info(`copyessay search query="${query}" found=${results.length} user=${interaction.user.tag}`);
 
     } else if (sub === 'id') {

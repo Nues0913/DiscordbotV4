@@ -1,4 +1,13 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags } from 'discord.js';
+import {
+    ActionRowBuilder,
+    ChatInputCommandInteraction,
+    MessageFlags,
+    ModalBuilder,
+    ModalSubmitInteraction,
+    SlashCommandBuilder,
+    TextInputBuilder,
+    TextInputStyle
+} from 'discord.js';
 import { add, remove, getAll, count } from '../../lib/db.js';
 import logger from '../../lib/logger.js';
 
@@ -8,8 +17,6 @@ const data = new SlashCommandBuilder()
     .addSubcommand(sub =>
         sub.setName('add')
             .setDescription('新增一則複製文')
-            .addStringOption(opt => opt.setName('title').setDescription('標題').setRequired(true))
-            .addStringOption(opt => opt.setName('content').setDescription('內容').setRequired(true))
     )
     .addSubcommand(sub =>
         sub.setName('delete')
@@ -25,14 +32,29 @@ async function execute(interaction: ChatInputCommandInteraction) {
     const sub = interaction.options.getSubcommand();
 
     if (sub === 'add') {
-        const title = interaction.options.getString('title', true);
-        const content = interaction.options.getString('content', true);
-        const entry = await add(title, content);
-        await interaction.reply({
-            content: `已新增複製文 #${entry.id}：**${entry.title}**`,
-            flags: MessageFlags.Ephemeral
-        });
-        logger.info(`copymanager add id=${entry.id} title="${entry.title}" by ${interaction.user.tag}`);
+        const titleInput = new TextInputBuilder()
+            .setCustomId('title')
+            .setLabel('標題')
+            .setStyle(TextInputStyle.Short)
+            .setMaxLength(100)
+            .setRequired(true);
+
+        const contentInput = new TextInputBuilder()
+            .setCustomId('content')
+            .setLabel('內容')
+            .setStyle(TextInputStyle.Paragraph)
+            .setMaxLength(2000)
+            .setRequired(true);
+
+        const modal = new ModalBuilder()
+            .setCustomId('copymanager:add')
+            .setTitle('新增複製文')
+            .addComponents(
+                new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput),
+                new ActionRowBuilder<TextInputBuilder>().addComponents(contentInput)
+            );
+
+        await interaction.showModal(modal);
 
     } else if (sub === 'delete') {
         const id = interaction.options.getInteger('id', true);
@@ -71,4 +93,16 @@ async function execute(interaction: ChatInputCommandInteraction) {
     }
 }
 
-export { data, execute };
+async function handleModal(interaction: ModalSubmitInteraction) {
+    const title = interaction.fields.getTextInputValue('title');
+    const content = interaction.fields.getTextInputValue('content');
+    const entry = await add(title, content);
+
+    await interaction.reply({
+        content: `已新增複製文 #${entry.id}：**${entry.title}**`,
+        flags: MessageFlags.Ephemeral
+    });
+    logger.info(`copymanager add id=${entry.id} title="${entry.title}" by ${interaction.user.tag}`);
+}
+
+export { data, execute, handleModal };

@@ -47,6 +47,25 @@ async function registerGlobalCommands(commands: any[]) {
 })();
 
 client.on(Events.InteractionCreate, async interaction => {
+    if (interaction.isModalSubmit() && interaction.customId === 'copymanager:add') {
+        const command = interaction.client.commands.get('copymanager');
+        if (!command || !('handleModal' in command)) {
+            logger.error('No modal handler found for copymanager:add.');
+            return;
+        }
+        try {
+            await command.handleModal(interaction);
+        } catch (error) {
+            logger.error(error);
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp({ content: 'There was an error while executing this command!', flags: MessageFlags.Ephemeral });
+            } else {
+                await interaction.reply({ content: 'There was an error while executing this command!', flags: MessageFlags.Ephemeral });
+            }
+        }
+        return;
+    }
+
     if (!interaction.isChatInputCommand()) {
         return;
     }
