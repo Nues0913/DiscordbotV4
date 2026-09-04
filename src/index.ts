@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import fg from 'fast-glob';
 import { Client, Events, Collection, GatewayIntentBits, REST, Routes, MessageFlags } from 'discord.js';
 import logger from './lib/logger.js';
+import { generateNvidiaNimReply } from './lib/nvidiaNim.js';
 
 dotenv.config();
 const TOKEN = process.env.TOKEN || "";
@@ -16,6 +17,30 @@ const client = new Client({
 });
 client.commands = new Collection();
 let commands = [];
+
+function splitDiscordMessage(content: string, maxLength = 2000): string[] {
+    const chunks: string[] = [];
+    let remaining = content.trim();
+
+    while (remaining.length > maxLength) {
+        let splitAt = remaining.lastIndexOf('\n', maxLength);
+        if (splitAt < maxLength / 2) {
+            splitAt = remaining.lastIndexOf(' ', maxLength);
+        }
+        if (splitAt < maxLength / 2) {
+            splitAt = maxLength;
+        }
+
+        chunks.push(remaining.slice(0, splitAt).trimEnd());
+        remaining = remaining.slice(splitAt).trimStart();
+    }
+
+    if (remaining) {
+        chunks.push(remaining);
+    }
+
+    return chunks;
+}
 
 async function registerGlobalCommands(commands: any[]) {
     const rest = new REST({ version: '10' }).setToken(TOKEN);
@@ -110,6 +135,95 @@ client.on(Events.MessageCreate, async (message) => {
             logger.error(error);
             message.reply('There was an error while reloading commands.');
         }
+    }
+});
+
+// Ask MiniMax through NVIDIA NIM when the bot is mentioned.
+client.on(Events.MessageCreate, async (message) => {
+    if (message.author.bot || !client.user || !message.mentions.users.has(client.user.id)) {
+        return;
+    }
+
+    const prompt = message.content
+        .replaceAll(`<@${client.user.id}>`, '')
+        .replaceAll(`<@!${client.user.id}>`, '')
+        .trim();
+
+    if (!prompt) {
+        await message.reply({
+            content: '請在提及我時附上想問的內容。',
+            allowedMentions: { repliedUser: false }
+        });
+        return;
+    }
+
+    const responseMessage = await message.reply({
+        content: '正在思考…',
+        allowedMentions: { parse: [], repliedUser: false }
+    });
+    let latestAnswer = '';
+    let lastEditAt = 0;
+    let lastRenderedAnswer = '';
+    let editQueue = Promise.resolve();
+
+    const queueStreamingEdit = (content: string) => {
+        latestAnswer = content;
+        const now = Date.now();
+        if (now - lastEditAt < 1_250) {
+            return;
+        }
+        lastEditAt = now;
+
+        editQueue = editQueue
+            .then(async () => {
+                const preview = latestAnswer.length > 2000
+                    ? `${latestAnswer.slice(0, 1997)}...`
+                    : latestAnswer;
+                if (preview && preview !== lastRenderedAnswer) {
+                    await responseMessage.edit({
+                        content: preview,
+                        allowedMentions: { parse: [] }
+                    });
+                    lastRenderedAnswer = preview;
+                }
+            })
+            .catch(error => {
+                logger.error(error);
+            });
+    };
+
+    try {
+        const answer = await generateNvidiaNimReply(
+            prompt,
+            queueStreamingEdit,
+            queueStreamingEdit
+        );
+        await editQueue;
+
+        const chunks = splitDiscordMessage(answer);
+        await responseMessage.edit({
+            content: chunks[0],
+            allowedMentions: { parse: [] }
+        });
+
+        for (const chunk of chunks.slice(1)) {
+            await message.channel.send({
+                content: chunk,
+                allowedMentions: { parse: [] }
+            });
+        }
+    } catch (error) {
+        logger.error(error);
+        await editQueue;
+
+        const interruptionNotice = '\n\n⚠️ 回覆中斷，請稍後再試。';
+        const errorContent = latestAnswer
+            ? `${latestAnswer.slice(0, 2000 - interruptionNotice.length).trimEnd()}${interruptionNotice}`
+            : '目前無法取得 AI 回覆，請稍後再試。';
+        await responseMessage.edit({
+            content: errorContent,
+            allowedMentions: { parse: [] }
+        });
     }
 });
 
