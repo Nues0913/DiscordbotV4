@@ -3,18 +3,24 @@ import fg from 'fast-glob';
 import { Client, Events, Collection, GatewayIntentBits, REST, Routes, MessageFlags } from 'discord.js';
 import logger from './lib/logger.js';
 import { generateNvidiaNimReply } from './lib/nvidiaNim.js';
+import { registerVoiceEntrancePlayer } from './lib/voiceEntrancePlayer.js';
 
 dotenv.config();
 const TOKEN = process.env.TOKEN || "";
 const CLIENT_ID = process.env.CLIENT_ID || "";
 const TESTER_ID = process.env.TESTER_ID || "";
+const COMMAND_GLOB = import.meta.url.endsWith('.ts')
+    ? 'src/commands/**/*.ts'
+    : 'dist/commands/**/*.js';
 
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent]
 });
+registerVoiceEntrancePlayer(client);
 client.commands = new Collection();
 let commands = [];
 
@@ -50,7 +56,7 @@ async function registerGlobalCommands(commands: any[]) {
 }
 
 (async () => {
-    const files = await fg('src/commands/**/*.ts', {
+    const files = await fg(COMMAND_GLOB, {
         absolute: true, onlyFiles: true,
         ignore: ['**/*.d.ts']
     });
@@ -116,7 +122,7 @@ client.on(Events.InteractionCreate, async interaction => {
 client.on(Events.MessageCreate, async (message) => {
     if (message.content === '!reload' && message.author.id === TESTER_ID) {
         try {
-            const files = await fg('src/commands/**/*.ts', {
+            const files = await fg(COMMAND_GLOB, {
                 absolute: true, onlyFiles: true,
                 ignore: ['**/*.d.ts']
             }); client.commands.clear();
