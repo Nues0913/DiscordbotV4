@@ -4,6 +4,8 @@ import { Client, Events, Collection, GatewayIntentBits, REST, Routes, MessageFla
 import logger from './lib/logger.js';
 import { generateNvidiaNimReply } from './lib/nvidiaNim.js';
 import { registerVoiceEntrancePlayer } from './lib/voiceEntrancePlayer.js';
+import { musicPlayer } from './lib/localMusicPlayer.js';
+import { musicLibrary } from './lib/localMusicLibrary.js';
 
 dotenv.config();
 const TOKEN = process.env.TOKEN || "";
@@ -21,6 +23,8 @@ const client = new Client({
         GatewayIntentBits.MessageContent]
 });
 registerVoiceEntrancePlayer(client);
+musicPlayer.initialize(client);
+void musicLibrary.load().catch(error => logger.error(error));
 client.commands = new Collection();
 let commands = [];
 
@@ -78,6 +82,13 @@ async function registerGlobalCommands(commands: any[]) {
 })();
 
 client.on(Events.InteractionCreate, async interaction => {
+    try {
+        const musicCommand = client.commands.get('music');
+        if (musicCommand?.handleMusicInteraction && await musicCommand.handleMusicInteraction(interaction)) return;
+    } catch (error) {
+        logger.error(error);
+        return;
+    }
     if (interaction.isModalSubmit() && interaction.customId === 'copymanager:add') {
         const command = interaction.client.commands.get('copymanager');
         if (!command || !('handleModal' in command)) {
